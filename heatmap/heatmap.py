@@ -85,9 +85,6 @@ class HeatmapGenerator(object):
             if 'min' in self.heatmap_parameters['db'] and 'max' in self.heatmap_parameters['db']:
                 self.set_db_limit(self.heatmap_parameters['db']['min'], self.heatmap_parameters['db']['max'])
 
-            # if self.heatmap_parameters and 'legends' in self.heatmap_parameters:
-            # self.legend_height = 25
-
     # Overide minimal and maximal dB limit
     def set_db_limit(self, min_z, max_z):
         self.db_limit_isset = True
@@ -236,7 +233,6 @@ class HeatmapGenerator(object):
             legends = load_jsonfile(stationsfilename)
 
             for legend in legends['stations']:
-                #if legend['freq_left'] > last_freq_find_legende:
                 if 'name' in legend:
                     if 'freq_left' in legend:
                         legend['freq_left'] = hz2Float(legend['freq_left'])
@@ -255,10 +251,12 @@ class HeatmapGenerator(object):
                     legend['cropped_bw'] = legend['cropped_right'] - legend['cropped_left']
                     legend['cropped_center'] = legend['cropped_left'] + (legend['cropped_bw'] / 2)
 
-                    if legend['cropped_left'] >= self.freq_left and legend['cropped_left'] <= self.freq_right or \
-                        legend['freq_right'] >= self.freq_left and legend['freq_right'] <= self.freq_right:
+                    if self.freq_left <= legend['freq_left'] <= self.freq_right or \
+                                            self.freq_left <= legend['freq_right'] <= self.freq_right:
                         legends_can_draw.append(legend)
-                        #last_freq_find_legende = legend['freq_right']
+                    else:
+                        if legend['freq_left'] <= self.freq_left and legend['freq_right'] >= self.freq_right:
+                            legends_can_draw.append(legend)
 
         # Order legends by bandwith
         legends_can_draw = sorted(legends_can_draw, key=lambda x: x['bw'], reverse=True)
@@ -269,26 +267,25 @@ class HeatmapGenerator(object):
                 nbcolumns = len(self.legends_row[lineidx])
                 # Check if can i append the freq
                 if nbcolumns > 0:
-                    if legend['cropped_left'] >= self.legends_row[lineidx][nbcolumns - 1]['cropped_right'] or \
-                        legend['cropped_right'] <= self.legends_row[lineidx][0]['cropped_left']:
-                            append_in_same_line = True
-                            break
+                    if legend['freq_left'] >= self.legends_row[lineidx][nbcolumns - 1]['freq_right'] or \
+                            legend['freq_right'] <= self.legends_row[lineidx][0]['freq_left']:
+                        append_in_same_line = True
+                        break
 
                 if nbcolumns > 1:
                     for column in range(1, nbcolumns):
-                        if legend['cropped_left'] >= self.legends_row[lineidx][column - 1]['cropped_right'] and \
-                            legend['cropped_right'] <= self.legends_row[lineidx][column]['cropped_left']:
-                                append_in_same_line = True
-                                break
+                        if legend['freq_left'] >= self.legends_row[lineidx][column - 1]['freq_right'] and \
+                                        legend['freq_right'] <= self.legends_row[lineidx][column]['freq_left']:
+                            append_in_same_line = True
+                            break
 
             if append_in_same_line:
                 self.legends_row[lineidx].append(legend)
-                self.legends_row[lineidx] = sorted(self.legends_row[lineidx], key=lambda x: x['cropped_left'])
+                self.legends_row[lineidx] = sorted(self.legends_row[lineidx], key=lambda x: x['freq_left'])
             else:
                 if len(self.legends_row) + 1 <= self.max_nb_lines_legend:
                     self.legends_row.append([])
                     self.legends_row[len(self.legends_row) - 1].append(legend)
-
 
         self.legends_row.reverse()
         self.legends_height = len(self.legends_row) * (self.fontsize + self.legend_line_height + self.legend_line_space)
@@ -313,19 +310,23 @@ class HeatmapGenerator(object):
                 # Calc center text
                 textsizex, textsizey = self.font.getsize(legend['name'])
                 textpos = freq_centerpos - (textsizex / 2)
-                ypos = self.img_height - self.legends_height + (line * (self.fontsize + self.legend_line_height + self.legend_line_space))
+                ypos = self.img_height - self.legends_height + (
+                    line * (self.fontsize + self.legend_line_height + self.legend_line_space))
                 if textpos >= last_line_xpos[line]:
-                    draw.text((textpos, ypos + self.legend_line_height + 6), legend['name'], font=self.font, fill='white')
+                    draw.text((textpos, ypos + self.legend_line_height + 6), legend['name'], font=self.font,
+                              fill='white')
                     last_line_xpos[line] = textpos + textsizex
 
                     # Check if bandwith in the same point
-                    if int(freq_rightpos-freq_leftpos) > 5:
+                    if int(freq_rightpos - freq_leftpos) > 5:
                         draw.line(
-                            [freq_leftpos + 1, ypos + self.legend_line_height, freq_rightpos - 1, ypos + self.legend_line_height],
+                            [freq_leftpos + 1, ypos + self.legend_line_height, freq_rightpos - 1,
+                             ypos + self.legend_line_height],
                             fill='white')
 
                         # Draw horizontal line
-                        draw.line([freq_centerpos , ypos + self.legend_line_height, freq_centerpos , ypos + self.legend_line_height + 5], fill='white')
+                        draw.line([freq_centerpos, ypos + self.legend_line_height, freq_centerpos,
+                                   ypos + self.legend_line_height + 5], fill='white')
 
                         cropped_left_pos = (legend['cropped_left'] - self.freq_left) * freqpixel
                         cropped_right_pos = (legend['cropped_right'] - self.freq_left) * freqpixel
@@ -335,18 +336,21 @@ class HeatmapGenerator(object):
                             for idx in range(0, 10, 2):
                                 draw.point((cropped_left_pos + idx, ypos + self.legend_line_height), fill='black')
                         else:
-                            draw.line([freq_leftpos + 1, ypos + self.legend_line_height, freq_leftpos + 1, ypos], fill='white')
+                            draw.line([freq_leftpos + 1, ypos + self.legend_line_height, freq_leftpos + 1, ypos],
+                                      fill='white')
 
                         # Draw right limit
                         if cropped_right_pos > self.img_width:
                             for idx in range(0, 10, 2):
                                 draw.point((cropped_right_pos - idx, ypos + self.legend_line_height), fill='black')
                         else:
-                            draw.line([freq_rightpos - 1, ypos + self.legend_line_height, freq_rightpos - 1 , ypos], fill='white')
+                            draw.line([freq_rightpos - 1, ypos + self.legend_line_height, freq_rightpos - 1, ypos],
+                                      fill='white')
 
                     else:
                         r = 1
-                        draw.ellipse((freq_centerpos - r, ypos + (self.legend_line_height / 2) - r,freq_centerpos + r, ypos + (self.legend_line_height / 2)+ r), fill='gray')
+                        draw.ellipse((freq_centerpos - r, ypos + (self.legend_line_height / 2) - r, freq_centerpos + r,
+                                      ypos + (self.legend_line_height / 2) + r), fill='cyan')
 
     # Draw text from python list
     def draw_textfromlist(self):
@@ -480,7 +484,7 @@ class HeatmapGenerator(object):
 
 # #######################################
 # Functions
-########################################
+# #######################################
 
 def frange(start, stop, step):
     idx = 0
@@ -490,7 +494,7 @@ def frange(start, stop, step):
 
 
 # def min_filter(row):
-#     size = 3
+# size = 3
 #     result = []
 #     for i in range(size):
 #         here = row[i]
@@ -524,6 +528,7 @@ def unity2Float(stringvalue, unityobject):
 
 def hz2Float(stringvalue):
     return unity2Float(stringvalue, HzUnities)
+
 
 def sec2Float(stringvalue):
     return unity2Float(stringvalue, secUnities)
